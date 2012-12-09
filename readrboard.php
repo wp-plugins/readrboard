@@ -3,11 +3,11 @@
 Plugin Name: ReadrBoard
 Plugin URI: http://www.readrboard.com/
 Description: ReadrBoard lets your readers express a reaction to any phrase, picture, video, or article on your website with the ease of a 'like' button.
-Version: 0.0.2
+Version: 0.0.3
 Author: team@readrboard.com
 */
 
-define('READRBOARD_VERSION', '0.0.2');
+define('READRBOARD_VERSION', '0.0.3');
 
 register_deactivation_hook( __FILE__, array( 'Readrboard', 'uninstall' ) );
 
@@ -21,7 +21,10 @@ class Readrboard {
     }
 }
 
+add_action('init', 'readrboard_init');
+
 function readrboard_init() {
+    add_action('wp_enqueue_scripts', 'readrboard_enqueue_scripts');
     add_action('admin_menu', 'readrboard_config_page');
     readrboard_admin_alert_check_for_clear();
     readrboard_admin_alert();
@@ -29,12 +32,28 @@ function readrboard_init() {
     add_filter('the_content', 'readrboard_edit_page_template');
 }
 
-add_action('init', 'readrboard_init');
+function readrboard_enqueue_scripts() {
+    $handle = "readrboard_engage_script";
+    $src = sprintf(
+        '%1s/static/engage.js?wordpressplugin=true',
+        Readrboard::BASEURL
+    );
+    $deps = array();
+    $ver = false;
+    $in_footer = true;
+
+    wp_enqueue_script(
+        $handle,
+        $src,
+        $deps,
+        $ver,
+        $in_footer 
+    );
+
+}
 
 function readrboard_config_page() {
-    if ( function_exists('add_submenu_page') )
-        add_submenu_page('plugins.php', __('ReadrBoard Settings'), __('ReadrBoard Settings'), 'manage_options', 'readrboard-key-config', 'readrboard_conf');
-
+    add_options_page( 'ReadrBoard Options', 'ReadrBoard', 'manage_options', 'readrboard-settings', 'readrboard_conf' );
 }
 function readrboard_add_post_class($test) {
     array_push( $test, "readrboard_page");
@@ -55,6 +74,10 @@ function readrboard_edit_page_template($template) {
 }
 
 function readrboard_conf() {
+if ( !current_user_can( 'manage_options' ) )  {
+    wp_die( __( 'You do not have sufficient permissions to access this page.' ) );
+}
+
 ?>
 <?php if ( !empty($_POST['submit'] ) ) : ?>
 <div id="message" class="updated fade"><p><strong><?php _e('Options saved.') ?></strong></p></div>
@@ -174,9 +197,17 @@ function readrboard_conf() {
 }
 
 function readrboard_printIframe() {
-    $url = get_bloginfo('url');
-    $parse = parse_url( $url );
-    $domain = $parse['host'];
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) {
+        $has_ssl = true;
+    }
+    if($has_ssl){
+        $prot = "https://";
+    }else{
+        $prot = "http://";
+    }
+    $domain = $_SERVER['HTTP_HOST'];
+    $xdm_url = $prot.$domain;
+    $domainNormalized = preg_replace('#^www\.(.+\.)#i', '$1', $domain);
     $options = readrboard_get_options();
     $short_name = $options['short_name'];
 
@@ -184,19 +215,20 @@ function readrboard_printIframe() {
 
     $qs = array(
         "hostplatform=wordpress",
-        "hostdomain=" . $domain,
+        "host_xdm_url=" . $xdm_url,
+        "hostdomain=" . $domainNormalized,
         "short_name=" . $short_name,
         "company_name=" . $blogName
     );
 
-    //todo: figure out a better string formater
     echo sprintf(
-        '<iframe src="%1s/wordpress/?%2s&%3s&%4s&%5s" height="1500px;" width="900px;"></iframe>',
+        '<iframe src="%1s/wordpress/?%2s&%3s&%4s&%5s&%6s" height="1500px;" width="900px;"></iframe>',
         Readrboard::BASEURL,
         $qs[0],
         $qs[1],
         $qs[2],
-        $qs[3]
+        $qs[3],
+        $qs[4]
     );
 }
 
@@ -247,7 +279,7 @@ function readrboard_admin_alert() {
         function readrboard_warning() {
             
             echo "
-            <div id='readrboard-warning' class='updated fade'><p><strong>".__('Readrboard is almost ready.')."</strong> ".sprintf(__('Please complete the guided setup in the <a href="%1$s">ReadrBoard Settings</a> panel.'), "plugins.php?page=readrboard-key-config")."</p></div>
+            <div id='readrboard-warning' class='updated fade'><p><strong>".__('Readrboard is almost ready.')."</strong> ".sprintf(__('Please complete the guided setup in the <a href="%1$s">ReadrBoard Settings</a> panel.'), "options-general.php?page=readrboard-settings")."</p></div>
             ";
         }
         add_action('admin_notices', 'readrboard_warning');
@@ -257,14 +289,5 @@ function readrboard_admin_alert() {
 
 ?>
 <?php
-
-function readrboard_add_engage_script () {
-    echo sprintf(
-        '<script type="text/javascript" src="%1s/static/engage.js?wordpressplugin=true" id="readrboardscript"></script>',
-        Readrboard::BASEURL
-    );
-}
-
-add_action('wp_footer', 'readrboard_add_engage_script');
 
 ?>

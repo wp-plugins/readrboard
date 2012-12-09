@@ -24,3 +24,6 @@ First Beta Version Released
 
 = 0.0.2 =
 Some minor improvements to the readrboard settings interface.
+
+= 0.0.3 =
+Moved the engage.js script from the footer to properly use wp_enqueue_script, moved the settings panel, added xdm_url info for our iframe.
